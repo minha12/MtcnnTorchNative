@@ -9,9 +9,6 @@ from torchvision.transforms import functional as F_trans
 
 from utils import get_reference_facial_points, warp_and_crop_face
 
-
-# from mtcnn_pytorch.src.first_stage import device
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
@@ -59,62 +56,6 @@ def _generate_bboxes(probs, offsets, scale, threshold):
     )
 
     return bounding_boxes
-
-
-# def _generate_bboxes(probs, offsets, scale, threshold):
-#     """Generate bounding boxes at places
-#     where there is probably a face.
-
-#     Arguments:
-#         probs: a float numpy array of shape [n, m].
-#         offsets: a float numpy array of shape [1, 4, n, m].
-#         scale: a float number,
-#             width and height of the image were scaled by this number.
-#         threshold: a float number.
-
-#     Returns:
-#         a float numpy array of shape [n_boxes, 9]
-#     """
-
-#     # applying P-Net is equivalent, in some sense, to
-#     # moving 12x12 window with stride 2
-#     stride = 2
-#     cell_size = 12
-
-#     # indices of boxes where there is probably a face
-#     inds = np.where(probs > threshold)
-
-#     if inds[0].size == 0:
-#         return np.array([])
-
-#     # transformations of bounding boxes
-#     tx1, ty1, tx2, ty2 = [offsets[0, i, inds[0], inds[1]] for i in range(4)]
-#     # they are defined as:
-#     # w = x2 - x1 + 1
-#     # h = y2 - y1 + 1
-#     # x1_true = x1 + tx1*w
-#     # x2_true = x2 + tx2*w
-#     # y1_true = y1 + ty1*h
-#     # y2_true = y2 + ty2*h
-
-#     offsets = np.array([tx1, ty1, tx2, ty2])
-#     score = probs[inds[0], inds[1]]
-
-#     # P-Net is applied to scaled images
-#     # so we need to rescale bounding boxes back
-#     bounding_boxes = np.vstack(
-#         [
-#             np.round((stride * inds[1] + 1.0) / scale),
-#             np.round((stride * inds[0] + 1.0) / scale),
-#             np.round((stride * inds[1] + 1.0 + cell_size) / scale),
-#             np.round((stride * inds[0] + 1.0 + cell_size) / scale),
-#             score,
-#             offsets,
-#         ]
-#     )
-#     # why one is added?
-
-#     return bounding_boxes.T
 
 
 def _preprocess(img):
@@ -352,27 +293,6 @@ def get_image_boxes(bounding_boxes, img, size=24):
     )
 
     img_boxes = np.zeros((num_boxes, 3, size, size), "float32")
-
-    # for i in range(num_boxes):
-    #     # Convert tensor elements to Python integers for PIL.Image.crop
-    #     x1, y1, x2, y2 = (
-    #         int(x[i].item()),
-    #         int(y[i].item()),
-    #         int(ex[i].item()),
-    #         int(ey[i].item()),
-    #     )
-
-    #     # Crop the image patch
-    #     img_patch = img.crop((x1, y1, x2 + 1, y2 + 1))
-
-    #     # Resize the patch to the desired size
-    #     img_patch = img_patch.resize((size, size), Image.BILINEAR)
-
-    #     # Convert the patch to a tensor and preprocess
-    #     img_patch = np.asarray(img_patch, "float32")
-
-    #     # Store the preprocessed patch
-    #     img_boxes[i, :, :, :] = _preprocess(img_patch)
     for i in range(num_boxes):
         img_box = np.zeros((h[i], w[i], 3), "uint8")
 
@@ -388,60 +308,12 @@ def get_image_boxes(bounding_boxes, img, size=24):
 
         img_boxes[i, :, :, :] = _preprocess(img_box)
 
-    # return img_boxes
-
     return img_boxes
-
-    # def get_image_boxes(bounding_boxes, img, size=24):
-    #     """Cut out boxes from the image using PyTorch operations.
-
-    #     Arguments:
-    #         bounding_boxes: a float tensor of shape [n, 5].
-    #         img: a PyTorch tensor of the image in (C, H, W) format.
-    #         size: an integer, size of cutouts.
-
-    #     Returns:
-    #         a float tensor of shape [n, 3, size, size].
-    #     """
-    #     # transform the PIL img to tensor size (C, H, W)
-    #     img = F_trans.to_tensor(img)
-    #     num_boxes = bounding_boxes.shape[0]
-    #     _, height, width = img.shape
-
-    #     [dy, edy, dx, edx, y, ey, x, ex, w, h] = correct_bboxes(
-    #         bounding_boxes.to("cpu"), width, height
-    #     )
-    #     img_boxes = torch.zeros((num_boxes, 3, size, size), dtype=torch.float32)
-
-    #     for i in range(num_boxes):
-    #         # Crop the image patch
-    #         img_patch = F_trans.crop(
-    #             img, int(y[i].item()), int(x[i].item()), int(h[i].item()), int(w[i].item())
-    #         )
-    #         # print img_patch shape
-    #         # print(img_patch.shape)
-    #         # Resize the patch to the desired size
-    #         img_patch = F_trans.resize(img_patch, [size, size])
-    #         # Convert the patch to a tensor and preprocess
-    #         img_patch = np.asarray(img_patch, "float32")
-    #         # Store the preprocessed patch
-    #         print(img_patch.shape)
-    #         img_boxes[i] = torch.Tensor(_preprocess(img_patch))
-    #         print(img_boxes[i].shape)
-
-    # return img_boxes
 
 
 class PNet(nn.Module):
     def __init__(self):
         super(PNet, self).__init__()
-
-        # suppose we have input with size HxW, then
-        # after first layer: H - 2,
-        # after pool: ceil((H - 2)/2),
-        # after second conv: ceil((H - 2)/2) - 2,
-        # after last conv: ceil((H - 2)/2) - 4,
-        # and the same for W
 
         self.features = nn.Sequential(
             OrderedDict(
@@ -592,13 +464,6 @@ class ONet(nn.Module):
         return c, b, a
 
 
-# from scipy.linalg import lstsq
-# from scipy.ndimage import geometric_transform  # , map_coordinates
-
-
-# device = 'cpu'
-
-
 class MTCNN:
     def __init__(self):
         self.pnet = PNet().to(device)
@@ -638,7 +503,7 @@ class MTCNN:
         for s in scales:
             boxes = run_first_stage(image, self.pnet, scale=s, threshold=thresholds[0])
             bounding_boxes.append(boxes)
-        # print("bounding_boxes", bounding_boxes)
+
         bounding_boxes = [i for i in bounding_boxes if i is not None]
         if len(bounding_boxes) == 0:
             return None
@@ -648,46 +513,35 @@ class MTCNN:
         bounding_boxes = bounding_boxes[keep]
 
         bounding_boxes = calibrate_box(bounding_boxes[:, 0:5], bounding_boxes[:, 5:])
-        # print("bounding_boxes", bounding_boxes)
+
         bounding_boxes = convert_to_square(bounding_boxes)
-        # print("bounding_boxes", bounding_boxes)
+
         bounding_boxes[:, 0:4] = torch.round(bounding_boxes[:, 0:4])
-        # print("bounding_boxes", bounding_boxes)
+
         return bounding_boxes
 
     def stage2(self, bounding_boxes, image, thresholds, nms_thresholds, device):
         if bounding_boxes is None or len(bounding_boxes) == 0:
             return None, None
-        # print("bounding_boxes begin stage 2", bounding_boxes)
+
         img_boxes = get_image_boxes(bounding_boxes, image, size=24)
         img_boxes = torch.FloatTensor(img_boxes).to(device)
-        # print img_boxes
-        # print("img_boxes", img_boxes)
+
         output = self.rnet(img_boxes)
         offsets = output[0]
         probs = output[1]
-        # print("probs", probs)
-        # print("probs", probs)
-        # print("thresholds[1]", thresholds[1])
+
         keep = torch.where(probs[:, 1] > thresholds[1])[0]
-        # print("keep", keep)
-        # print("bounding boxes ", bounding_boxes)
+
         bounding_boxes = bounding_boxes[keep]
-        # print("bounding_boxes", bounding_boxes)
+
         bounding_boxes[:, 4] = probs[keep, 1].view(-1)
-        # print("bounding_boxes", bounding_boxes)
-        ######################################
+
         offsets = offsets[keep]
 
         keep = nms(bounding_boxes, nms_thresholds[1])
-        # printout out keep
-        # print("keep", keep)
         bounding_boxes = bounding_boxes[keep]
-        # print("bounding boxes before calibration", bounding_boxes)
         bounding_boxes = calibrate_box(bounding_boxes, offsets[keep])
-        # print bounding_boxes after calibration
-        # print("bounding_boxes", bounding_boxes)
-        # print("bounding boxes after calibration", bounding_boxes)
         bounding_boxes = convert_to_square(bounding_boxes)
         bounding_boxes[:, 0:4] = torch.round(bounding_boxes[:, 0:4])
 
@@ -786,63 +640,3 @@ class MTCNN:
         )
         print("stage3", bounding_boxes, landmarks)
         return bounding_boxes, landmarks
-
-    # def detect_faces(
-    #     self,
-    #     image,
-    #     min_face_size=20.0,
-    #     thresholds=[0.6, 0.7, 0.8],
-    #     nms_thresholds=[0.7, 0.7, 0.7],
-    # ):
-    #     """
-    #     Arguments:
-    #         image:a PyTorch tensor of shape [3, height, width]
-    #         min_face_size: a float number.
-    #         thresholds: a list of length 3.
-    #         nms_thresholds: a list of length 3.
-
-    #     Returns:
-    #         two float numpy arrays of shapes [n_boxes, 4] and [n_boxes, 10],
-    #         bounding boxes and facial landmarks.
-    #     """
-
-    #     # BUILD AN IMAGE PYRAMID
-    #     # Get image dimensions
-    #     _, height, width = image.shape
-    #     min_length = min(height, width)
-
-    #     min_detection_size = 12
-    #     factor = 0.707  # sqrt(0.5)
-
-    #     # scales for scaling the image
-    #     scales = []
-
-    #     # scales the image so that
-    #     # minimum size that we can detect equals to
-    #     # minimum face size that we want to detect
-    #     m = min_detection_size / min_face_size
-    #     min_length *= m
-
-    #     factor_count = 0
-    #     while min_length > min_detection_size:
-    #         scales.append(m * factor**factor_count)
-    #         min_length *= factor
-    #         factor_count += 1
-
-    #     bounding_boxes = []
-
-    #     # Stage 1
-
-    #     bounding_boxes = self.stage1(image, scales, thresholds, nms_thresholds)
-    #     print("stage1", bounding_boxes)
-    #     # Stage 2
-    #     bounding_boxes = self.stage2(
-    #         bounding_boxes, image, thresholds, nms_thresholds, self.device
-    #     )
-    #     print("stage2", bounding_boxes)
-    #     # Stage 3
-    #     bounding_boxes, landmarks = self.stage3(
-    #         bounding_boxes, image, thresholds, nms_thresholds, self.device
-    #     )
-    #     print("stage3", bounding_boxes, landmarks)
-    #     return bounding_boxes, landmarks
